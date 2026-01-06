@@ -31,6 +31,8 @@ services:
   patient-service:
     build: ./patient-service
     restart: on-failure
+    ports:
+      - "8088:8088"
     depends_on:
       - eureka-register
       - mysql-db
@@ -48,6 +50,8 @@ services:
   medecin-service:
     build: ./medecin-service
     restart: on-failure
+    ports:
+      - "8089:8089"
     depends_on:
       - eureka-register
       - mysql-db
@@ -90,6 +94,20 @@ services:
       MYSQL_ROOT_PASSWORD: password
     ports:
       - "3310:3306"
+    networks:
+      - hospital-network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    restart: always
+    depends_on:
+      - mysql-db
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql-db
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: password
     networks:
       - hospital-network
 
