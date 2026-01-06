@@ -1,169 +1,98 @@
-version: "3.9"
-
 services:
-  # ===================== EUREKA SERVER =====================
-  eureka-server:
+  # ===============================
+  # EUREKA SERVER
+  # ===============================
+  eureka-register:
     build: ./eureka-register2/eureka-register
-    container_name: hospital-eureka
+    restart: on-failure
     ports:
       - "8763:8763"
     networks:
       - hospital-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8763/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # ===================== PATIENT DATABASE =====================
-  patient-db:
-    image: mysql:latest
-    container_name: patient-db
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: patientdb
-      MYSQL_USER: patient
-      MYSQL_PASSWORD: patient
-    ports:
-      - "3309:3306" # Port 3306 pour celle-ci
-    healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - patient-db-data:/var/lib/mysql
-    networks:
-      - hospital-network
-
-  # ===================== PATIENT SERVICE =====================
-  patient-service:
-    build: ./patient-service
-    container_name: hospital-patient-service
-    ports:
-      - "8088:8088"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:mysql://patient-db:3306/patientdb
-      SPRING_DATASOURCE_USERNAME: patient
-      SPRING_DATASOURCE_PASSWORD: patient
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8763/eureka/
-    depends_on:
-      patient-db:
-        condition: service_healthy # Attend que MySQL soit vraiment prêt
-      eureka-server:
-        condition: service_healthy
-    networks:
-      - hospital-network
-
-  # ===================== MEDECIN DATABASE =====================
-  medecin-db:
-    image: mysql:latest
-    container_name: medecin-db
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: medecindb
-      MYSQL_USER: medecin
-      MYSQL_PASSWORD: medecin
-    ports:
-      - "3307:3306" # Changé en 3307 pour éviter le conflit
-    healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - medecin-db-data:/var/lib/mysql
-    networks:
-      - hospital-network
-
-  # ===================== MEDECIN SERVICE =====================
-  medecin-service:
-    build: ./medecin-service
-    container_name: hospital-medecin-service
-    ports:
-      - "8089:8089"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:mysql://medecin-db:3306/medecindb
-      SPRING_DATASOURCE_USERNAME: medecin
-      SPRING_DATASOURCE_PASSWORD: medecin
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8763/eureka/
-    depends_on:
-      medecin-db:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-    networks:
-      - hospital-network
-
-  # ===================== RENDEZ-VOUS DATABASE =====================
-  rendezvous-db:
-    image: mysql:latest
-    container_name: rendezvous-db
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: rdv_db
-      MYSQL_USER: rendezvous
-      MYSQL_PASSWORD: rendezvous
-    ports:
-      - "3308:3306" # Changé en 3308 pour éviter le conflit
-    healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - rendezvous-db-data:/var/lib/mysql
-    networks:
-      - hospital-network
-
-  # ===================== RENDEZ-VOUS SERVICE =====================
-  rendez-vous-service:
-    build: ./rendez_vous-service
-    container_name: hospital-rendezvous-service
-    ports:
-      - "8090:8090"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:mysql://rendezvous-db:3306/rdv_db # Nom corrigé ici
-      SPRING_DATASOURCE_USERNAME: rendezvous
-      SPRING_DATASOURCE_PASSWORD: rendezvous
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8763/eureka/
-    depends_on:
-      rendezvous-db:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-      patient-service:
-        condition: service_started
-      medecin-service:
-        condition: service_started
-    networks:
-      - hospital-network
-
-  # ===================== API GATEWAY =====================
+  # ===============================
+  # API GATEWAY
+  # ===============================
   api-gateway:
     build: ./apiGateWay2/apiGateWay2
-    container_name: hospital-gateway
+    restart: on-failure
     ports:
       - "8762:8762"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8763/eureka/
     depends_on:
-      eureka-server:
-        condition: service_healthy
+      - eureka-register
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8763/eureka/
     networks:
       - hospital-network
 
-# ===================== NETWORK =====================
+  # ===============================
+  # PATIENT SERVICE
+  # ===============================
+  patient-service:
+    build: ./patient-service
+    restart: on-failure
+    depends_on:
+      - eureka-register
+      - mysql-db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/patientdb?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: password
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8763/eureka/
+    networks:
+      - hospital-network
+
+  # ===============================
+  # MEDECIN SERVICE
+  # ===============================
+  medecin-service:
+    build: ./medecin-service
+    restart: on-failure
+    depends_on:
+      - eureka-register
+      - mysql-db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/medecindb?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: password
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8763/eureka/
+    networks:
+      - hospital-network
+
+  # ===============================
+  # RENDEZ-VOUS SERVICE
+  # ===============================
+  rendez-vous-service:
+    build: ./rendez_vous-service
+    restart: on-failure
+    ports:
+      - "8090:8090"
+    depends_on:
+      - eureka-register
+      - mysql-db
+      - patient-service
+      - medecin-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/rdv_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: password
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-register:8763/eureka/
+    networks:
+      - hospital-network
+
+  # ===============================
+  # MYSQL DATABASE
+  # ===============================
+  mysql-db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+    ports:
+      - "3310:3306"
+    networks:
+      - hospital-network
+
 networks:
   hospital-network:
     driver: bridge
-
-# ===================== VOLUMES =====================
-volumes:
-  patient-db-data:
-  medecin-db-data:
-  rendezvous-db-data:
